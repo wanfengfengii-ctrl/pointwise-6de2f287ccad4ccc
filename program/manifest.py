@@ -3,6 +3,7 @@ import json
 from dataclasses import asdict, dataclass
 
 from local_service import Problem, canonical_json, integer, label, object_fields
+from program.codisplay import CoDisplay, parse_co_display
 from program.conflicts import find_screen_conflicts
 from program.schedule import ScheduledOutput, schedule_sort_key
 from scripts.revisions import revision_number
@@ -14,9 +15,10 @@ class ShowManifest:
     show_id: str
     revision: str
     outputs: tuple[ScheduledOutput, ...]
+    co_display: CoDisplay | None = None
 
 
-def build_manifest(show_id, revision, outputs):
+def build_manifest(show_id, revision, outputs, co_display=None):
     label(show_id, 'show_id')
     revision_number(revision)
     if not outputs:
@@ -48,11 +50,20 @@ def build_manifest(show_id, revision, outputs):
                 ],
             })
         raise Problem(409, 'screen_conflict', conflicts=windows)
-    return ShowManifest(show_id, revision, tuple(sorted(outputs, key=schedule_sort_key)))
+    return ShowManifest(show_id, revision, tuple(sorted(outputs, key=schedule_sort_key)),
+                        co_display=co_display)
+
+
+def manifest_view(manifest):
+    """JSON-safe manifest dict; ordinary shows stay free of co_display."""
+    value = asdict(manifest)
+    if value.get('co_display') is None:
+        value.pop('co_display', None)
+    return value
 
 
 def encode_manifest(manifest):
-    return canonical_json(asdict(manifest))
+    return canonical_json(manifest_view(manifest))
 
 
 def decode_manifest(body):
@@ -60,14 +71,20 @@ def decode_manifest(body):
         value = json.loads(body)
     except (ValueError, RecursionError) as error:
         raise Problem(400, 'invalid_manifest') from error
-    object_fields(value, 'show_id', 'revision', 'outputs')
+    if not isinstance(value, dict):
+        raise Problem(400, 'invalid_manifest')
+    keys = set(value)
+    required = {'show_id', 'revision', 'outputs'}
+    if required - keys or keys - required - {'co_display'}:
+        object_fields(value, 'show_id', 'revision', 'outputs')
     if not isinstance(value['outputs'], list):
         raise Problem(400, 'invalid_manifest')
     outputs = [
         ScheduledOutput(**object_fields(output, 'cue_id', 'language', 'at', 'screen', 'duration', 'text'))
         for output in value['outputs']
     ]
-    return build_manifest(value['show_id'], value['revision'], outputs)
+    co_display = parse_co_display(value['co_display']) if 'co_display' in value else None
+    return build_manifest(value['show_id'], value['revision'], outputs, co_display)
 
 
 def manifest_identity(manifest):

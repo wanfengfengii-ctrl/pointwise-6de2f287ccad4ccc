@@ -29,7 +29,15 @@ class ProjectionHandler(JsonHandler):
             return 200, receipt
         if route == ('POST', '/advance'):
             object_fields(data, 'show_id')
-            return 200, {'records': [asdict(item) for item in advance(inbox, cues, records, clock, data['show_id'])]}
+            show_id = data['show_id']
+            emitted = advance(inbox, cues, records, clock, show_id)
+            body = {'records': [asdict(item) for item in emitted]}
+            with transaction(inbox.database) as connection:
+                manifest = inbox.get_manifest(connection, show_id)
+                if manifest is not None and manifest.co_display is not None:
+                    body['co_display_status'] = (
+                        cues.co_display_state(connection, show_id) or 'waiting')
+            return 200, body
         if route == ('GET', '/readback'):
             object_fields(data, *('show_id', 'cue_id') if 'cue_id' in data else ('show_id',))
             return 200, readback(inbox, records, **data)

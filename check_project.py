@@ -3,8 +3,18 @@ import sys
 import unittest
 
 
+def build_suite():
+    loader = unittest.defaultTestLoader
+    suite = loader.discover('tests', top_level_dir='.')
+    # Co-display acceptance scenarios live at the repository root and double
+    # as the rerunnable simultaneous demo.
+    import simultaneous_demo
+    suite.addTests(loader.loadTestsFromModule(simultaneous_demo))
+    return suite
+
+
 def main():
-    suite = unittest.defaultTestLoader.discover('tests', top_level_dir='.')
+    suite = build_suite()
     if suite.countTestCases():
         result = unittest.TextTestRunner(verbosity=2).run(suite)
     else:

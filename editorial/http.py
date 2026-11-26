@@ -10,7 +10,7 @@ from editorial.preload import preload
 from editorial.receipts import ReceiptStore
 from editorial.reconcile import verdict
 from local_service import JsonHandler, Problem, bind, call, object_fields, transaction
-from program.manifest import encode_manifest, manifest_identity
+from program.manifest import encode_manifest, manifest_identity, manifest_view
 from program.rehearsal import rehearse
 from program.show import ShowRepository
 from scripts.approval import approve
@@ -80,15 +80,23 @@ class EditorialHandler(JsonHandler):
             with scripts.transaction() as connection:
                 return 200, asdict(load_approved_revision(scripts, connection, data['revision']))
         if route == ('POST', '/rehearse'):
-            fields = object_fields(data, 'show_id', 'revision', 'start', 'lanes')
-            return 200, asdict(rehearse(scripts, shows, **fields))
+            required = ('show_id', 'revision', 'start', 'lanes')
+            if not isinstance(data, dict) or set(data) - set(required) - {'co_display'} \
+                    or set(required) - set(data):
+                object_fields(data, *required)
+            fields = {key: data[key] for key in required}
+            if 'co_display' in data and data['co_display'] is None:
+                raise Problem(400, 'invalid_co_display')
+            fields['co_display'] = data.get('co_display')
+            manifest = rehearse(scripts, shows, **fields)
+            return 200, manifest_view(manifest)
         if route == ('GET', '/rehearse'):
             object_fields(data, 'show_id')
             with transaction(shows.database) as connection:
                 manifest = shows.get_manifest(connection, data['show_id'])
             if manifest is None:
                 raise Problem(404, 'no_formal_manifest', show_id=data['show_id'])
-            return 200, asdict(manifest)
+            return 200, manifest_view(manifest)
         if route == ('POST', '/preload'):
             object_fields(data, 'show_id')
             receipt = preload(shows, receipts, client, data['show_id'])

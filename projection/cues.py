@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 
 from local_service import Problem, canonical_json, create_tables, transaction
+from program.codisplay import STATE_TABLE_SQL, get_state, put_state
 from scripts.revisions import revision_number
 from scripts.validation import correction_parameters
 
@@ -55,7 +56,7 @@ class CueStore:
                 status TEXT NOT NULL CHECK (status IN ('accepted', 'already_shown')),
                 version TEXT NOT NULL
             );
-        ''')
+        ''' + STATE_TABLE_SQL)
 
     def register_manifest_cues(self, connection, manifest):
         texts = {}
@@ -131,6 +132,12 @@ class CueStore:
         connection.execute('''
             UPDATE output_work SET done = 1 WHERE show_id = ? AND cue_id = ? AND language = ?
         ''', (show_id, work.cue_id, work.language))
+
+    def co_display_state(self, connection, show_id):
+        return get_state(connection, show_id)
+
+    def save_co_display_state(self, connection, show_id, status):
+        put_state(connection, show_id, status)
 
 
 def next_version(version):
