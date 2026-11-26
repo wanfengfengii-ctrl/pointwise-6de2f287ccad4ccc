@@ -1,0 +1,7 @@
+{
+  "script_id": "weekend",
+  "cues": [
+    {"cue_id": "C", "second": 10, "zh": "请入场", "en": "Please enter"},
+    {"cue_id": "D", "second": 20, "zh": "演出即将开始", "en": "The show will begin shortly"}
+  ]
+}
